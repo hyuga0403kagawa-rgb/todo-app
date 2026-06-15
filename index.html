@@ -467,7 +467,7 @@
     Notification.requestPermission().then(p => {
       if (p === 'granted') {
         document.getElementById('notif-banner').style.display = 'none';
-        checkNotifications();
+        scheduleAllNotifications();
       }
     });
   }
@@ -476,28 +476,75 @@
     return msgs[Math.floor(Math.random() * msgs.length)];
   }
 
-  function checkNotifications() {
+  // Service Worker に全通知スケジュールを送信
+  async function scheduleAllNotifications() {
     if (Notification.permission !== 'granted') return;
+    if (!navigator.serviceWorker || !navigator.serviceWorker.controller) return;
+
     const notified = getNotified();
     const now = Date.now();
+    const items = [];
+
     tasks.filter(t => !t.done && t.due).forEach(t => {
       const dueMs = new Date(t.due).getTime();
-      const diffMs = dueMs - now;
       NOTIF_THRESHOLDS.forEach(th => {
         const key = `${t.id}_${th.ms}`;
-        if (!notified[key] && diffMs <= th.ms && diffMs >= th.ms - 15 * 60 * 1000) {
-          markNotified(key);
-          sendNotification(t, th.label, diffMs, pickMsg(th.msgs));
+        if (notified[key]) return;
+        const fireAt = dueMs - th.ms; // 通知を鳴らす絶対時刻
+        if (fireAt <= now) {
+          // 過去の通知：15分以内なら即時発火、それ以上は既読扱い
+          if (now - fireAt < 15 * 60 * 1000) {
+            const diffMs = dueMs - now;
+            markNotified(key);
+            new Notification(`📌 ${t.title}`, {
+              body: `⏰ 期限まであと ${formatDiffShort(diffMs)}（${th.label}）\n${pickMsg(th.msgs)}`,
+              icon: './icon-192.png',
+              tag: key,
+            });
+          } else {
+            markNotified(key); // 古すぎる通知はスキップして既読に
+          }
+          return;
         }
+        items.push({
+          fireAt,
+          title: `📌 ${t.title}`,
+          body: `⏰ 期限まであと ${th.label}\n${pickMsg(th.msgs)}`,
+          tag: key,
+          taskId: t.id,
+          thresholdMs: th.ms,
+        });
       });
     });
+
+    navigator.serviceWorker.controller.postMessage({
+      type: 'SCHEDULE_NOTIFICATIONS',
+      items,
+    });
+  }
+
+  // SW から通知が発火された後、既読マークをつける（ページが開いているとき）
+  function onSwMessage(event) {
+    if (event.data && event.data.type === 'SCHEDULED') {
+      console.log(`通知スケジュール登録: ${event.data.count}件`);
+    }
+  }
+
+  // SW が通知を発火した tag をもとに既読マーク（Notification click で処理）
+  function checkNotifications() {
+    // 旧来の即時チェックは scheduleAllNotifications が担うので不要
+    // ただし SW がまだ準備できていない場合のフォールバック
+    if (Notification.permission !== 'granted') return;
+    if (navigator.serviceWorker && navigator.serviceWorker.controller) {
+      scheduleAllNotifications();
+    }
   }
 
   function sendNotification(task, label, diffMs, oneLiner) {
     const remaining = formatDiffShort(diffMs);
     new Notification(`📌 ${task.title}`, {
       body: `⏰ 期限まであと ${remaining}（${label}）\n${oneLiner}`,
-      icon: 'icon-192.png',
+      icon: './icon-192.png',
       tag: `task-${task.id}-${label}`,
     });
   }
@@ -556,12 +603,12 @@
       createdAt: new Date().toISOString(),
     });
     document.getElementById('task-input').value = '';
-    save(); render();
+    save(); render(); scheduleAllNotifications();
   }
 
   function toggleDone(id) {
     const t = tasks.find(t => t.id === id);
-    if (t) { t.done = !t.done; save(); render(); }
+    if (t) { t.done = !t.done; save(); render(); scheduleAllNotifications(); }
   }
 
   function deleteTask(id) {
@@ -569,7 +616,7 @@
     const notified = getNotified();
     Object.keys(notified).forEach(k => { if (k.startsWith(`${id}_`)) delete notified[k]; });
     localStorage.setItem(NOTIFIED_KEY, JSON.stringify(notified));
-    save(); render();
+    save(); render(); scheduleAllNotifications();
   }
 
   /* ── 編集モーダル ── */
@@ -615,7 +662,7 @@
     save();
     document.getElementById('edit-modal').style.display = 'none';
     editingId = null;
-    render();
+    render(); scheduleAllNotifications();
   }
 
   /* ── フィルター ── */
@@ -730,10 +777,20 @@
 
   render();
   setInterval(tick, 1000);
-  checkNotifications();
 
   if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('./sw.js');
+    navigator.serviceWorker.register('./sw.js').then(reg => {
+      // SW が有効になったらスケジュール登録
+      const sw = reg.active || reg.waiting || reg.installing;
+      if (navigator.serviceWorker.controller) {
+        scheduleAllNotifications();
+      } else {
+        navigator.serviceWorker.addEventListener('controllerchange', () => {
+          scheduleAllNotifications();
+        });
+      }
+    });
+    navigator.serviceWorker.addEventListener('message', onSwMessage);
   }
 </script>
 </body>
