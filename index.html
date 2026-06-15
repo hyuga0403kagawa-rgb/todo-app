@@ -1,0 +1,594 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>タスク管理</title>
+  <link rel="manifest" href="manifest.json">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="タスク管理">
+  <link rel="apple-touch-icon" href="icon-192.png">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Segoe UI', 'Hiragino Sans', sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      padding: 24px 16px;
+    }
+
+    .app { max-width: 720px; margin: 0 auto; }
+
+    h1 {
+      color: white;
+      font-size: 2rem;
+      text-align: center;
+      margin-bottom: 24px;
+      text-shadow: 0 2px 8px rgba(0,0,0,0.2);
+    }
+
+    /* ── 通知許可バナー ── */
+    #notif-banner {
+      background: rgba(255,255,255,0.15);
+      border: 2px solid rgba(255,255,255,0.4);
+      border-radius: 14px;
+      padding: 12px 18px;
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      color: white;
+      font-size: 0.9rem;
+    }
+    #notif-banner button {
+      margin-left: auto;
+      background: white;
+      color: #764ba2;
+      border: none;
+      border-radius: 20px;
+      padding: 6px 16px;
+      font-weight: 700;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+
+    /* ── フォーム ── */
+    .form-card {
+      background: white;
+      border-radius: 20px;
+      padding: 24px;
+      margin-bottom: 24px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.15);
+    }
+    .form-card h2 { font-size: 1.1rem; color: #555; margin-bottom: 16px; }
+
+    .form-row {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 12px;
+      flex-wrap: wrap;
+    }
+    .form-row:last-child { margin-bottom: 0; }
+
+    input[type="text"], input[type="datetime-local"], select {
+      border: 2px solid #e8e8f0;
+      border-radius: 10px;
+      padding: 10px 14px;
+      font-size: 0.9rem;
+      outline: none;
+      transition: border-color 0.2s;
+      background: #fafafa;
+    }
+    input[type="text"]:focus, input[type="datetime-local"]:focus, select:focus {
+      border-color: #667eea;
+      background: white;
+    }
+    #task-input { flex: 1; min-width: 200px; }
+
+    .btn-add {
+      background: linear-gradient(135deg, #667eea, #764ba2);
+      color: white;
+      border: none;
+      border-radius: 10px;
+      padding: 10px 22px;
+      font-size: 0.95rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: transform 0.15s, box-shadow 0.15s;
+    }
+    .btn-add:hover { transform: translateY(-2px); box-shadow: 0 4px 16px rgba(102,126,234,0.4); }
+    .btn-add:active { transform: translateY(0); }
+
+    /* ── フィルターバー ── */
+    .filter-bar {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-bottom: 16px;
+    }
+    .filter-btn {
+      background: rgba(255,255,255,0.25);
+      color: white;
+      border: 2px solid rgba(255,255,255,0.4);
+      border-radius: 20px;
+      padding: 6px 16px;
+      font-size: 0.85rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .filter-btn.active, .filter-btn:hover {
+      background: white;
+      color: #667eea;
+      border-color: white;
+    }
+
+    /* ── タスクリスト ── */
+    .tasks-section { margin-bottom: 20px; }
+    .section-label {
+      color: rgba(255,255,255,0.85);
+      font-size: 0.8rem;
+      font-weight: 700;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      margin-bottom: 8px;
+      padding-left: 4px;
+    }
+
+    .task-card {
+      background: white;
+      border-radius: 14px;
+      padding: 14px 18px;
+      margin-bottom: 10px;
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      box-shadow: 0 3px 12px rgba(0,0,0,0.1);
+      transition: transform 0.15s, box-shadow 0.15s;
+      border-left: 5px solid #ccc;
+      animation: slideIn 0.25s ease;
+      position: relative;
+      overflow: hidden;
+    }
+    @keyframes slideIn {
+      from { opacity: 0; transform: translateY(-10px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    .task-card:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(0,0,0,0.13); }
+    .task-card.done { opacity: 0.5; }
+    .task-card.done .task-title { text-decoration: line-through; color: #aaa; }
+
+    /* 優先度×残り時間で左ボーダー色 */
+    .task-card[data-priority="high"]   { border-left-color: #ff5c7c; }
+    .task-card[data-priority="medium"] { border-left-color: #ffb347; }
+    .task-card[data-priority="low"]    { border-left-color: #67d48b; }
+
+    /* 緊急度による背景グロー */
+    .task-card.urgent-critical { background: linear-gradient(90deg, #fff0f3, white 40%); }
+    .task-card.urgent-high     { background: linear-gradient(90deg, #fff5f0, white 40%); }
+    .task-card.urgent-medium   { background: linear-gradient(90deg, #fffbf0, white 40%); }
+    .task-card.urgent-low      { background: white; }
+
+    .task-check {
+      width: 22px; height: 22px;
+      border-radius: 50%;
+      border: 2.5px solid #ccc;
+      cursor: pointer;
+      flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center;
+      transition: all 0.2s;
+      margin-top: 2px;
+    }
+    .task-check:hover { border-color: #667eea; background: #f0f0ff; }
+    .task-card.done .task-check { background: #67d48b; border-color: #67d48b; color: white; }
+
+    .task-body { flex: 1; min-width: 0; }
+    .task-title { font-size: 1rem; font-weight: 600; color: #333; word-break: break-all; }
+
+    .task-meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-top: 6px;
+    }
+
+    .badge {
+      display: inline-block;
+      border-radius: 20px;
+      padding: 2px 10px;
+      font-size: 0.75rem;
+      font-weight: 700;
+    }
+    .badge-priority-high   { background: #fff0f3; color: #ff5c7c; }
+    .badge-priority-medium { background: #fff8ed; color: #e8930a; }
+    .badge-priority-low    { background: #effff5; color: #28a758; }
+    .badge-cat { color: white; }
+    .badge-due { background: #f0f4ff; color: #667eea; }
+    .badge-due.overdue { background: #fff0f3; color: #ff5c7c; }
+
+    /* ── カウントダウン表示 ── */
+    .countdown {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      border-radius: 20px;
+      padding: 3px 12px;
+      font-size: 0.78rem;
+      font-weight: 800;
+      font-variant-numeric: tabular-nums;
+      letter-spacing: 0.02em;
+    }
+    .countdown.cd-safe     { background: #e8f9f0; color: #1e9e5c; }
+    .countdown.cd-week     { background: #e8f4ff; color: #2b7dd6; }
+    .countdown.cd-medium   { background: #fff8e0; color: #c47f00; }
+    .countdown.cd-urgent   { background: #fff0f3; color: #e03060; }
+    .countdown.cd-critical {
+      background: #ff5c7c;
+      color: white;
+      animation: pulse 1s infinite;
+    }
+    .countdown.cd-overdue  { background: #2d2d2d; color: #ff8fa3; }
+    @keyframes pulse {
+      0%,100% { transform: scale(1); }
+      50%      { transform: scale(1.04); }
+    }
+
+    .task-actions { display: flex; gap: 6px; flex-shrink: 0; }
+    .btn-icon {
+      background: none;
+      border: none;
+      cursor: pointer;
+      font-size: 1.1rem;
+      opacity: 0.4;
+      transition: opacity 0.2s, transform 0.15s;
+      padding: 4px;
+    }
+    .btn-icon:hover { opacity: 1; transform: scale(1.2); }
+
+    .empty-state {
+      text-align: center;
+      color: rgba(255,255,255,0.7);
+      padding: 32px;
+      font-size: 1rem;
+    }
+  </style>
+</head>
+<body>
+<div class="app">
+  <h1>📝 タスク管理</h1>
+
+  <!-- 通知許可バナー -->
+  <div id="notif-banner" style="display:none">
+    🔔 期限前に通知を受け取るには許可が必要です
+    <button onclick="requestNotifPermission()">通知を許可する</button>
+  </div>
+
+  <!-- 追加フォーム -->
+  <div class="form-card">
+    <h2>＋ 新しいタスク</h2>
+    <div class="form-row">
+      <input type="text" id="task-input" placeholder="タスクを入力..." />
+      <button class="btn-add" onclick="addTask()">追加</button>
+    </div>
+    <div class="form-row">
+      <select id="priority-select">
+        <option value="high">🔴 高</option>
+        <option value="medium" selected>🟡 中</option>
+        <option value="low">🟢 低</option>
+      </select>
+      <select id="cat-select">
+        <option value="仕事">💼 仕事</option>
+        <option value="個人">🏠 個人</option>
+        <option value="買い物">🛒 買い物</option>
+        <option value="勉強">📚 勉強</option>
+        <option value="その他">📌 その他</option>
+      </select>
+      <input type="datetime-local" id="due-date" />
+    </div>
+  </div>
+
+  <!-- フィルター -->
+  <div class="filter-bar">
+    <button class="filter-btn active" onclick="setFilter('all', this)">すべて</button>
+    <button class="filter-btn" onclick="setFilter('active', this)">未完了</button>
+    <button class="filter-btn" onclick="setFilter('done', this)">完了済み</button>
+    <button class="filter-btn" onclick="setFilter('high', this)">🔴 高優先</button>
+    <button class="filter-btn" onclick="setFilter('today', this)">📅 今日期限</button>
+  </div>
+
+  <!-- タスクリスト -->
+  <div id="task-list"></div>
+</div>
+
+<script>
+  const PRIORITY_LABEL = { high: '高', medium: '中', low: '低' };
+  const CAT_COLORS = {
+    '仕事': '#5c7cfa', '個人': '#f06595', '買い物': '#20c997',
+    '勉強': '#fd7e14', 'その他': '#868e96'
+  };
+
+  // 通知タイミング: [ミリ秒前, ラベル, 一言メッセージ]
+  const NOTIF_THRESHOLDS = [
+    { ms: 7 * 24 * 60 * 60 * 1000, label: '1週間前', msg: '余裕がある今のうちに準備を始めよう！' },
+    { ms: 5 * 24 * 60 * 60 * 1000, label: '5日前',   msg: '計画を立てて少しずつ進めよう！' },
+    { ms: 3 * 24 * 60 * 60 * 1000, label: '3日前',   msg: 'そろそろ本格的に取り掛かろう！' },
+    { ms: 1 * 24 * 60 * 60 * 1000, label: '1日前',   msg: '明日が期限！今日中に仕上げよう！' },
+    { ms: 12 * 60 * 60 * 1000,     label: '12時間前', msg: 'あと半日！集中して進めよう！' },
+    { ms: 1  * 60 * 60 * 1000,     label: '1時間前',  msg: '残り1時間！全力で取り掛かろう！🔥' },
+  ];
+  // 通知済みキー: "taskId_thresholdMs"
+  const NOTIFIED_KEY = 'notified_v1';
+
+  let tasks = JSON.parse(localStorage.getItem('tasks') || '[]');
+  let currentFilter = 'all';
+
+  function save() { localStorage.setItem('tasks', JSON.stringify(tasks)); }
+
+  function todayStr() { return new Date().toISOString().slice(0, 10); }
+
+  /* ── 通知 ── */
+  function getNotified() {
+    return JSON.parse(localStorage.getItem(NOTIFIED_KEY) || '{}');
+  }
+  function markNotified(key) {
+    const n = getNotified();
+    n[key] = true;
+    localStorage.setItem(NOTIFIED_KEY, JSON.stringify(n));
+  }
+
+  function requestNotifPermission() {
+    Notification.requestPermission().then(p => {
+      if (p === 'granted') {
+        document.getElementById('notif-banner').style.display = 'none';
+        checkNotifications();
+      }
+    });
+  }
+
+  function checkNotifications() {
+    if (Notification.permission !== 'granted') return;
+    const notified = getNotified();
+    const now = Date.now();
+
+    tasks.filter(t => !t.done && t.due).forEach(t => {
+      const dueMs = new Date(t.due).getTime();
+      const diffMs = dueMs - now;
+
+      NOTIF_THRESHOLDS.forEach(th => {
+        const key = `${t.id}_${th.ms}`;
+        // 前後15分のウィンドウで一致チェック
+        if (!notified[key] && diffMs <= th.ms && diffMs >= th.ms - 15 * 60 * 1000) {
+          markNotified(key);
+          sendNotification(t, th.label, diffMs, th.msg);
+        }
+      });
+    });
+  }
+
+  function sendNotification(task, label, diffMs, oneLiner) {
+    const remaining = formatDiffShort(diffMs);
+    new Notification(`📌 ${task.title}`, {
+      body: `⏰ 期限まであと ${remaining}（${label}）\n${oneLiner}`,
+      icon: '📝',
+      tag: `task-${task.id}-${label}`,
+    });
+  }
+
+  /* ── カウントダウン計算 ── */
+  function formatCountdown(dueStr) {
+    if (!dueStr) return null;
+    const diff = new Date(dueStr).getTime() - Date.now();
+    return { diff, text: formatDiffFull(diff) };
+  }
+
+  function formatDiffFull(diff) {
+    if (diff < 0) {
+      const abs = Math.abs(diff);
+      return `超過 ${fmt(abs)}`;
+    }
+    return fmt(diff);
+  }
+
+  function formatDiffShort(diff) {
+    if (diff <= 0) return '超過';
+    const h = Math.floor(diff / 3600000);
+    const m = Math.floor((diff % 3600000) / 60000);
+    if (h >= 24) return `${Math.floor(h/24)}日${h%24}時間`;
+    if (h > 0) return `${h}時間${m}分`;
+    return `${m}分`;
+  }
+
+  function fmt(ms) {
+    const totalSec = Math.floor(ms / 1000);
+    const d = Math.floor(totalSec / 86400);
+    const h = Math.floor((totalSec % 86400) / 3600);
+    const m = Math.floor((totalSec % 3600) / 60);
+    const s = totalSec % 60;
+    if (d > 0) return `${d}日 ${pad(h)}:${pad(m)}:${pad(s)}`;
+    return `${pad(h)}:${pad(m)}:${pad(s)}`;
+  }
+  function pad(n) { return String(n).padStart(2, '0'); }
+
+  function cdClass(diff) {
+    if (diff < 0)                     return 'cd-overdue';
+    if (diff < 60 * 60 * 1000)       return 'cd-critical';  // 1時間未満
+    if (diff < 24 * 60 * 60 * 1000)  return 'cd-urgent';    // 24時間未満
+    if (diff < 3 * 24 * 60 * 60 * 1000) return 'cd-medium'; // 3日未満
+    if (diff < 7 * 24 * 60 * 60 * 1000) return 'cd-week';   // 1週間未満
+    return 'cd-safe';
+  }
+
+  function urgencyClass(diff) {
+    if (diff === null || diff === undefined) return '';
+    if (diff < 0)                         return 'urgent-critical';
+    if (diff < 24 * 60 * 60 * 1000)      return 'urgent-critical';
+    if (diff < 3  * 24 * 60 * 60 * 1000) return 'urgent-high';
+    if (diff < 7  * 24 * 60 * 60 * 1000) return 'urgent-medium';
+    return 'urgent-low';
+  }
+
+  /* ── タスク操作 ── */
+  function addTask() {
+    const title = document.getElementById('task-input').value.trim();
+    if (!title) return;
+    tasks.unshift({
+      id: Date.now(),
+      title,
+      priority: document.getElementById('priority-select').value,
+      category: document.getElementById('cat-select').value,
+      due: document.getElementById('due-date').value,  // datetime-local → "YYYY-MM-DDTHH:mm"
+      done: false,
+      createdAt: new Date().toISOString(),
+    });
+    document.getElementById('task-input').value = '';
+    save();
+    render();
+  }
+
+  function toggleDone(id) {
+    const t = tasks.find(t => t.id === id);
+    if (t) { t.done = !t.done; save(); render(); }
+  }
+
+  function deleteTask(id) {
+    tasks = tasks.filter(t => t.id !== id);
+    // 通知済みキーも掃除
+    const notified = getNotified();
+    Object.keys(notified).forEach(k => { if (k.startsWith(`${id}_`)) delete notified[k]; });
+    localStorage.setItem(NOTIFIED_KEY, JSON.stringify(notified));
+    save(); render();
+  }
+
+  function setFilter(f, btn) {
+    currentFilter = f;
+    document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    render();
+  }
+
+  function filteredTasks() {
+    return tasks.filter(t => {
+      if (currentFilter === 'active') return !t.done;
+      if (currentFilter === 'done')   return t.done;
+      if (currentFilter === 'high')   return t.priority === 'high';
+      if (currentFilter === 'today')  return t.due && t.due.startsWith(todayStr());
+      return true;
+    });
+  }
+
+  /* ── 描画 ── */
+  function render() {
+    const list = document.getElementById('task-list');
+    const filtered = filteredTasks();
+
+    if (filtered.length === 0) {
+      list.innerHTML = '<div class="empty-state">タスクがありません ✨</div>';
+      return;
+    }
+
+    const active = filtered.filter(t => !t.done);
+    const done   = filtered.filter(t => t.done);
+
+    let html = '';
+    if (active.length)
+      html += section('未完了', active);
+    if (done.length)
+      html += section('完了済み', done);
+    list.innerHTML = html;
+  }
+
+  function section(label, items) {
+    return `<div class="tasks-section">
+      <div class="section-label">${label} (${items.length})</div>
+      ${items.map(taskHTML).join('')}
+    </div>`;
+  }
+
+  function taskHTML(t) {
+    const cd = t.due ? formatCountdown(t.due) : null;
+    const diff = cd ? cd.diff : null;
+    const catColor = CAT_COLORS[t.category] || '#868e96';
+
+    const countdownBadge = (cd && !t.done) ? `
+      <span class="badge countdown ${cdClass(diff)}">
+        ⏱ ${cd.text}
+      </span>` : '';
+
+    const dueBadge = t.due ? `
+      <span class="badge badge-due ${diff !== null && diff < 0 && !t.done ? 'overdue' : ''}">
+        📅 ${t.due.replace('T', ' ').slice(0, 16)}
+      </span>` : '';
+
+    const urgency = (!t.done && diff !== null) ? urgencyClass(diff) : '';
+
+    return `
+      <div class="task-card ${t.done ? 'done' : ''} ${urgency}" data-priority="${t.priority}" data-id="${t.id}">
+        <div class="task-check" onclick="toggleDone(${t.id})">${t.done ? '✓' : ''}</div>
+        <div class="task-body">
+          <div class="task-title">${escHtml(t.title)}</div>
+          <div class="task-meta">
+            <span class="badge badge-priority-${t.priority}">${PRIORITY_LABEL[t.priority]}</span>
+            <span class="badge badge-cat" style="background:${catColor}">${t.category}</span>
+            ${dueBadge}
+            ${countdownBadge}
+          </div>
+        </div>
+        <div class="task-actions">
+          <button class="btn-icon" onclick="deleteTask(${t.id})" title="削除">🗑️</button>
+        </div>
+      </div>`;
+  }
+
+  function escHtml(s) {
+    return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  }
+
+  /* ── 毎秒tick ── */
+  function tick() {
+    // カウントダウン部分だけDOM更新（全再描画を避ける）
+    const now = Date.now();
+    document.querySelectorAll('.task-card[data-id]').forEach(card => {
+      const id = Number(card.dataset.id);
+      const t = tasks.find(x => x.id === id);
+      if (!t || !t.due || t.done) return;
+
+      const diff = new Date(t.due).getTime() - now;
+      const cd = card.querySelector('.countdown');
+      if (cd) {
+        cd.textContent = `⏱ ${formatDiffFull(diff)}`;
+        cd.className = `badge countdown ${cdClass(diff)}`;
+      }
+
+      // 緊急度クラスを更新
+      ['urgent-critical','urgent-high','urgent-medium','urgent-low'].forEach(c => card.classList.remove(c));
+      card.classList.add(urgencyClass(diff));
+    });
+
+    checkNotifications();
+  }
+
+  /* ── 初期化 ── */
+  document.getElementById('task-input').addEventListener('keydown', e => {
+    if (e.key === 'Enter') addTask();
+  });
+
+  // 通知権限チェック
+  if ('Notification' in window) {
+    if (Notification.permission === 'default') {
+      document.getElementById('notif-banner').style.display = 'flex';
+    }
+  }
+
+  render();
+  setInterval(tick, 1000);
+  checkNotifications();
+
+  // Service Worker登録（PWA・オフライン対応）
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('./sw.js');
+  }
+</script>
+</body>
+</html>
