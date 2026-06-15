@@ -160,12 +160,10 @@
     .task-card.done { opacity: 0.5; }
     .task-card.done .task-title { text-decoration: line-through; color: #aaa; }
 
-    /* 優先度×残り時間で左ボーダー色 */
     .task-card[data-priority="high"]   { border-left-color: #ff5c7c; }
     .task-card[data-priority="medium"] { border-left-color: #ffb347; }
     .task-card[data-priority="low"]    { border-left-color: #67d48b; }
 
-    /* 緊急度による背景グロー */
     .task-card.urgent-critical { background: linear-gradient(90deg, #fff0f3, white 40%); }
     .task-card.urgent-high     { background: linear-gradient(90deg, #fff5f0, white 40%); }
     .task-card.urgent-medium   { background: linear-gradient(90deg, #fffbf0, white 40%); }
@@ -208,7 +206,6 @@
     .badge-due { background: #f0f4ff; color: #667eea; }
     .badge-due.overdue { background: #fff0f3; color: #ff5c7c; }
 
-    /* ── カウントダウン表示 ── */
     .countdown {
       display: inline-flex;
       align-items: center;
@@ -224,18 +221,14 @@
     .countdown.cd-week     { background: #e8f4ff; color: #2b7dd6; }
     .countdown.cd-medium   { background: #fff8e0; color: #c47f00; }
     .countdown.cd-urgent   { background: #fff0f3; color: #e03060; }
-    .countdown.cd-critical {
-      background: #ff5c7c;
-      color: white;
-      animation: pulse 1s infinite;
-    }
+    .countdown.cd-critical { background: #ff5c7c; color: white; animation: pulse 1s infinite; }
     .countdown.cd-overdue  { background: #2d2d2d; color: #ff8fa3; }
     @keyframes pulse {
       0%,100% { transform: scale(1); }
       50%      { transform: scale(1.04); }
     }
 
-    .task-actions { display: flex; gap: 6px; flex-shrink: 0; }
+    .task-actions { display: flex; gap: 4px; flex-shrink: 0; }
     .btn-icon {
       background: none;
       border: none;
@@ -253,19 +246,78 @@
       padding: 32px;
       font-size: 1rem;
     }
+
+    /* ── 編集モーダル ── */
+    .modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.5);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+      padding: 16px;
+      animation: fadeIn 0.15s ease;
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; } to { opacity: 1; }
+    }
+    .modal {
+      background: white;
+      border-radius: 20px;
+      padding: 28px;
+      width: 100%;
+      max-width: 480px;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+      animation: slideUp 0.2s ease;
+    }
+    @keyframes slideUp {
+      from { transform: translateY(30px); opacity: 0; }
+      to   { transform: translateY(0);    opacity: 1; }
+    }
+    .modal h2 { font-size: 1.2rem; color: #333; margin-bottom: 20px; }
+    .modal .form-row { margin-bottom: 14px; }
+    .modal input[type="text"] { width: 100%; }
+    .modal input[type="datetime-local"] { width: 100%; }
+    .modal-actions {
+      display: flex;
+      gap: 10px;
+      margin-top: 20px;
+      justify-content: flex-end;
+    }
+    .btn-cancel {
+      background: #f0f0f5;
+      color: #666;
+      border: none;
+      border-radius: 10px;
+      padding: 10px 20px;
+      font-size: 0.95rem;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .btn-save {
+      background: linear-gradient(135deg, #667eea, #764ba2);
+      color: white;
+      border: none;
+      border-radius: 10px;
+      padding: 10px 24px;
+      font-size: 0.95rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: transform 0.15s;
+    }
+    .btn-save:hover { transform: translateY(-1px); }
   </style>
 </head>
 <body>
 <div class="app">
   <h1>📝 タスク管理</h1>
 
-  <!-- 通知許可バナー -->
   <div id="notif-banner" style="display:none">
     🔔 期限前に通知を受け取るには許可が必要です
     <button onclick="requestNotifPermission()">通知を許可する</button>
   </div>
 
-  <!-- 追加フォーム -->
   <div class="form-card">
     <h2>＋ 新しいタスク</h2>
     <div class="form-row">
@@ -289,7 +341,6 @@
     </div>
   </div>
 
-  <!-- フィルター -->
   <div class="filter-bar">
     <button class="filter-btn active" onclick="setFilter('all', this)">すべて</button>
     <button class="filter-btn" onclick="setFilter('active', this)">未完了</button>
@@ -298,8 +349,38 @@
     <button class="filter-btn" onclick="setFilter('today', this)">📅 今日期限</button>
   </div>
 
-  <!-- タスクリスト -->
   <div id="task-list"></div>
+</div>
+
+<!-- 編集モーダル -->
+<div id="edit-modal" class="modal-overlay" style="display:none" onclick="closeModal(event)">
+  <div class="modal">
+    <h2>✏️ タスクを編集</h2>
+    <div class="form-row">
+      <input type="text" id="edit-title" placeholder="タスク名" />
+    </div>
+    <div class="form-row">
+      <select id="edit-priority">
+        <option value="high">🔴 高</option>
+        <option value="medium">🟡 中</option>
+        <option value="low">🟢 低</option>
+      </select>
+      <select id="edit-cat">
+        <option value="仕事">💼 仕事</option>
+        <option value="個人">🏠 個人</option>
+        <option value="買い物">🛒 買い物</option>
+        <option value="勉強">📚 勉強</option>
+        <option value="その他">📌 その他</option>
+      </select>
+    </div>
+    <div class="form-row">
+      <input type="datetime-local" id="edit-due" style="width:100%" />
+    </div>
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="closeModal()">キャンセル</button>
+      <button class="btn-save" onclick="saveEdit()">保存</button>
+    </div>
+  </div>
 </div>
 
 <script>
@@ -309,32 +390,76 @@
     '勉強': '#fd7e14', 'その他': '#868e96'
   };
 
-  // 通知タイミング: [ミリ秒前, ラベル, 一言メッセージ]
+  // 通知タイミングと複数メッセージ
   const NOTIF_THRESHOLDS = [
-    { ms: 7 * 24 * 60 * 60 * 1000, label: '1週間前', msg: '余裕がある今のうちに準備を始めよう！' },
-    { ms: 5 * 24 * 60 * 60 * 1000, label: '5日前',   msg: '計画を立てて少しずつ進めよう！' },
-    { ms: 3 * 24 * 60 * 60 * 1000, label: '3日前',   msg: 'そろそろ本格的に取り掛かろう！' },
-    { ms: 1 * 24 * 60 * 60 * 1000, label: '1日前',   msg: '明日が期限！今日中に仕上げよう！' },
-    { ms: 12 * 60 * 60 * 1000,     label: '12時間前', msg: 'あと半日！集中して進めよう！' },
-    { ms: 1  * 60 * 60 * 1000,     label: '1時間前',  msg: '残り1時間！全力で取り掛かろう！🔥' },
+    {
+      ms: 7 * 24 * 60 * 60 * 1000, label: '1週間前',
+      msgs: [
+        '余裕がある今のうちに準備を始めよう！',
+        '先手必勝！早めのスタートが成功のカギ🗝️',
+        '1週間あれば十分！今日少しだけ手をつけてみよう。',
+        'まだ時間はある。でも始めるなら今日が最高！',
+      ]
+    },
+    {
+      ms: 5 * 24 * 60 * 60 * 1000, label: '5日前',
+      msgs: [
+        '計画を立てて少しずつ進めよう！',
+        '5日あれば余裕！今日のうちに段取りを決めよう📋',
+        'コツコツが最強。今日1歩踏み出そう！',
+        '計画は紙に書くと3倍実行しやすくなるよ✏️',
+      ]
+    },
+    {
+      ms: 3 * 24 * 60 * 60 * 1000, label: '3日前',
+      msgs: [
+        'そろそろ本格的に取り掛かろう！',
+        '3日前！今日やれば明日楽になる🚀',
+        '追い込みよりも今スタートが圧倒的有利！',
+        'ここから本気モード！やれるよ💪',
+      ]
+    },
+    {
+      ms: 1 * 24 * 60 * 60 * 1000, label: '1日前',
+      msgs: [
+        '明日が期限！今日中に仕上げよう！',
+        '残り24時間。集中すればまだ間に合う！⏰',
+        '今夜が勝負！全力でいこう🔥',
+        '明日の自分を楽にするために、今やろう！',
+      ]
+    },
+    {
+      ms: 12 * 60 * 60 * 1000, label: '12時間前',
+      msgs: [
+        'あと半日！集中して進めよう！',
+        '12時間、本気出せば絶対終わる！💥',
+        'ラストスパート開始！今すぐ取り掛かろう🏃',
+        '集中モードON！スマホは一旦置いてGO📵',
+      ]
+    },
+    {
+      ms: 1 * 60 * 60 * 1000, label: '1時間前',
+      msgs: [
+        '残り1時間！全力で取り掛かろう！🔥',
+        '60分あれば奇跡は起こせる！今すぐGO!!🚨',
+        'ラスト1時間！諦めたらそこで終わり。やれ！',
+        '1時間集中したら最高の達成感が待ってる✨',
+      ]
+    },
   ];
-  // 通知済みキー: "taskId_thresholdMs"
-  const NOTIFIED_KEY = 'notified_v1';
 
+  const NOTIFIED_KEY = 'notified_v1';
   let tasks = JSON.parse(localStorage.getItem('tasks') || '[]');
   let currentFilter = 'all';
+  let editingId = null;
 
   function save() { localStorage.setItem('tasks', JSON.stringify(tasks)); }
-
   function todayStr() { return new Date().toISOString().slice(0, 10); }
 
   /* ── 通知 ── */
-  function getNotified() {
-    return JSON.parse(localStorage.getItem(NOTIFIED_KEY) || '{}');
-  }
+  function getNotified() { return JSON.parse(localStorage.getItem(NOTIFIED_KEY) || '{}'); }
   function markNotified(key) {
-    const n = getNotified();
-    n[key] = true;
+    const n = getNotified(); n[key] = true;
     localStorage.setItem(NOTIFIED_KEY, JSON.stringify(n));
   }
 
@@ -347,21 +472,22 @@
     });
   }
 
+  function pickMsg(msgs) {
+    return msgs[Math.floor(Math.random() * msgs.length)];
+  }
+
   function checkNotifications() {
     if (Notification.permission !== 'granted') return;
     const notified = getNotified();
     const now = Date.now();
-
     tasks.filter(t => !t.done && t.due).forEach(t => {
       const dueMs = new Date(t.due).getTime();
       const diffMs = dueMs - now;
-
       NOTIF_THRESHOLDS.forEach(th => {
         const key = `${t.id}_${th.ms}`;
-        // 前後15分のウィンドウで一致チェック
         if (!notified[key] && diffMs <= th.ms && diffMs >= th.ms - 15 * 60 * 1000) {
           markNotified(key);
-          sendNotification(t, th.label, diffMs, th.msg);
+          sendNotification(t, th.label, diffMs, pickMsg(th.msgs));
         }
       });
     });
@@ -371,26 +497,20 @@
     const remaining = formatDiffShort(diffMs);
     new Notification(`📌 ${task.title}`, {
       body: `⏰ 期限まであと ${remaining}（${label}）\n${oneLiner}`,
-      icon: '📝',
+      icon: 'icon-192.png',
       tag: `task-${task.id}-${label}`,
     });
   }
 
-  /* ── カウントダウン計算 ── */
+  /* ── カウントダウン ── */
   function formatCountdown(dueStr) {
     if (!dueStr) return null;
     const diff = new Date(dueStr).getTime() - Date.now();
     return { diff, text: formatDiffFull(diff) };
   }
-
   function formatDiffFull(diff) {
-    if (diff < 0) {
-      const abs = Math.abs(diff);
-      return `超過 ${fmt(abs)}`;
-    }
-    return fmt(diff);
+    return diff < 0 ? `超過 ${fmt(Math.abs(diff))}` : fmt(diff);
   }
-
   function formatDiffShort(diff) {
     if (diff <= 0) return '超過';
     const h = Math.floor(diff / 3600000);
@@ -399,33 +519,26 @@
     if (h > 0) return `${h}時間${m}分`;
     return `${m}分`;
   }
-
   function fmt(ms) {
-    const totalSec = Math.floor(ms / 1000);
-    const d = Math.floor(totalSec / 86400);
-    const h = Math.floor((totalSec % 86400) / 3600);
-    const m = Math.floor((totalSec % 3600) / 60);
-    const s = totalSec % 60;
-    if (d > 0) return `${d}日 ${pad(h)}:${pad(m)}:${pad(s)}`;
-    return `${pad(h)}:${pad(m)}:${pad(s)}`;
+    const s = Math.floor(ms / 1000);
+    const d = Math.floor(s / 86400), h = Math.floor((s%86400)/3600);
+    const m = Math.floor((s%3600)/60), sc = s%60;
+    return d > 0 ? `${d}日 ${pad(h)}:${pad(m)}:${pad(sc)}` : `${pad(h)}:${pad(m)}:${pad(sc)}`;
   }
-  function pad(n) { return String(n).padStart(2, '0'); }
-
+  function pad(n) { return String(n).padStart(2,'0'); }
   function cdClass(diff) {
-    if (diff < 0)                     return 'cd-overdue';
-    if (diff < 60 * 60 * 1000)       return 'cd-critical';  // 1時間未満
-    if (diff < 24 * 60 * 60 * 1000)  return 'cd-urgent';    // 24時間未満
-    if (diff < 3 * 24 * 60 * 60 * 1000) return 'cd-medium'; // 3日未満
-    if (diff < 7 * 24 * 60 * 60 * 1000) return 'cd-week';   // 1週間未満
+    if (diff < 0)                          return 'cd-overdue';
+    if (diff < 60*60*1000)                 return 'cd-critical';
+    if (diff < 24*60*60*1000)              return 'cd-urgent';
+    if (diff < 3*24*60*60*1000)            return 'cd-medium';
+    if (diff < 7*24*60*60*1000)            return 'cd-week';
     return 'cd-safe';
   }
-
   function urgencyClass(diff) {
-    if (diff === null || diff === undefined) return '';
-    if (diff < 0)                         return 'urgent-critical';
-    if (diff < 24 * 60 * 60 * 1000)      return 'urgent-critical';
-    if (diff < 3  * 24 * 60 * 60 * 1000) return 'urgent-high';
-    if (diff < 7  * 24 * 60 * 60 * 1000) return 'urgent-medium';
+    if (diff == null) return '';
+    if (diff < 0 || diff < 24*60*60*1000)  return 'urgent-critical';
+    if (diff < 3*24*60*60*1000)            return 'urgent-high';
+    if (diff < 7*24*60*60*1000)            return 'urgent-medium';
     return 'urgent-low';
   }
 
@@ -438,13 +551,12 @@
       title,
       priority: document.getElementById('priority-select').value,
       category: document.getElementById('cat-select').value,
-      due: document.getElementById('due-date').value,  // datetime-local → "YYYY-MM-DDTHH:mm"
+      due: document.getElementById('due-date').value,
       done: false,
       createdAt: new Date().toISOString(),
     });
     document.getElementById('task-input').value = '';
-    save();
-    render();
+    save(); render();
   }
 
   function toggleDone(id) {
@@ -454,20 +566,65 @@
 
   function deleteTask(id) {
     tasks = tasks.filter(t => t.id !== id);
-    // 通知済みキーも掃除
     const notified = getNotified();
     Object.keys(notified).forEach(k => { if (k.startsWith(`${id}_`)) delete notified[k]; });
     localStorage.setItem(NOTIFIED_KEY, JSON.stringify(notified));
     save(); render();
   }
 
+  /* ── 編集モーダル ── */
+  function openEdit(id) {
+    const t = tasks.find(t => t.id === id);
+    if (!t) return;
+    editingId = id;
+    document.getElementById('edit-title').value    = t.title;
+    document.getElementById('edit-priority').value = t.priority;
+    document.getElementById('edit-cat').value      = t.category;
+    document.getElementById('edit-due').value      = t.due || '';
+    document.getElementById('edit-modal').style.display = 'flex';
+  }
+
+  function closeModal(e) {
+    if (e && e.target !== document.getElementById('edit-modal')) return;
+    document.getElementById('edit-modal').style.display = 'none';
+    editingId = null;
+  }
+
+  function saveEdit() {
+    const t = tasks.find(t => t.id === editingId);
+    if (!t) return;
+    const newTitle    = document.getElementById('edit-title').value.trim();
+    const newPriority = document.getElementById('edit-priority').value;
+    const newCat      = document.getElementById('edit-cat').value;
+    const newDue      = document.getElementById('edit-due').value;
+
+    if (!newTitle) return;
+
+    // 期限が変わったら通知済みをリセット
+    if (newDue !== t.due) {
+      const notified = getNotified();
+      Object.keys(notified).forEach(k => { if (k.startsWith(`${t.id}_`)) delete notified[k]; });
+      localStorage.setItem(NOTIFIED_KEY, JSON.stringify(notified));
+    }
+
+    t.title    = newTitle;
+    t.priority = newPriority;
+    t.category = newCat;
+    t.due      = newDue;
+
+    save();
+    document.getElementById('edit-modal').style.display = 'none';
+    editingId = null;
+    render();
+  }
+
+  /* ── フィルター ── */
   function setFilter(f, btn) {
     currentFilter = f;
     document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
     render();
   }
-
   function filteredTasks() {
     return tasks.filter(t => {
       if (currentFilter === 'active') return !t.done;
@@ -482,20 +639,15 @@
   function render() {
     const list = document.getElementById('task-list');
     const filtered = filteredTasks();
-
     if (filtered.length === 0) {
       list.innerHTML = '<div class="empty-state">タスクがありません ✨</div>';
       return;
     }
-
     const active = filtered.filter(t => !t.done);
     const done   = filtered.filter(t => t.done);
-
     let html = '';
-    if (active.length)
-      html += section('未完了', active);
-    if (done.length)
-      html += section('完了済み', done);
+    if (active.length) html += section('未完了', active);
+    if (done.length)   html += section('完了済み', done);
     list.innerHTML = html;
   }
 
@@ -510,22 +662,15 @@
     const cd = t.due ? formatCountdown(t.due) : null;
     const diff = cd ? cd.diff : null;
     const catColor = CAT_COLORS[t.category] || '#868e96';
-
-    const countdownBadge = (cd && !t.done) ? `
-      <span class="badge countdown ${cdClass(diff)}">
-        ⏱ ${cd.text}
-      </span>` : '';
-
-    const dueBadge = t.due ? `
-      <span class="badge badge-due ${diff !== null && diff < 0 && !t.done ? 'overdue' : ''}">
-        📅 ${t.due.replace('T', ' ').slice(0, 16)}
-      </span>` : '';
-
+    const countdownBadge = (cd && !t.done)
+      ? `<span class="badge countdown ${cdClass(diff)}">⏱ ${cd.text}</span>` : '';
+    const dueBadge = t.due
+      ? `<span class="badge badge-due ${diff !== null && diff < 0 && !t.done ? 'overdue' : ''}">📅 ${t.due.replace('T',' ').slice(0,16)}</span>` : '';
     const urgency = (!t.done && diff !== null) ? urgencyClass(diff) : '';
 
     return `
-      <div class="task-card ${t.done ? 'done' : ''} ${urgency}" data-priority="${t.priority}" data-id="${t.id}">
-        <div class="task-check" onclick="toggleDone(${t.id})">${t.done ? '✓' : ''}</div>
+      <div class="task-card ${t.done?'done':''} ${urgency}" data-priority="${t.priority}" data-id="${t.id}">
+        <div class="task-check" onclick="toggleDone(${t.id})">${t.done?'✓':''}</div>
         <div class="task-body">
           <div class="task-title">${escHtml(t.title)}</div>
           <div class="task-meta">
@@ -536,6 +681,7 @@
           </div>
         </div>
         <div class="task-actions">
+          <button class="btn-icon" onclick="openEdit(${t.id})" title="編集">✏️</button>
           <button class="btn-icon" onclick="deleteTask(${t.id})" title="削除">🗑️</button>
         </div>
       </div>`;
@@ -547,45 +693,45 @@
 
   /* ── 毎秒tick ── */
   function tick() {
-    // カウントダウン部分だけDOM更新（全再描画を避ける）
     const now = Date.now();
     document.querySelectorAll('.task-card[data-id]').forEach(card => {
-      const id = Number(card.dataset.id);
-      const t = tasks.find(x => x.id === id);
+      const t = tasks.find(x => x.id === Number(card.dataset.id));
       if (!t || !t.due || t.done) return;
-
       const diff = new Date(t.due).getTime() - now;
       const cd = card.querySelector('.countdown');
       if (cd) {
         cd.textContent = `⏱ ${formatDiffFull(diff)}`;
         cd.className = `badge countdown ${cdClass(diff)}`;
       }
-
-      // 緊急度クラスを更新
       ['urgent-critical','urgent-high','urgent-medium','urgent-low'].forEach(c => card.classList.remove(c));
       card.classList.add(urgencyClass(diff));
     });
-
     checkNotifications();
   }
 
-  /* ── 初期化 ── */
+  /* ── Enterキー・モーダルEscキー ── */
   document.getElementById('task-input').addEventListener('keydown', e => {
     if (e.key === 'Enter') addTask();
   });
-
-  // 通知権限チェック
-  if ('Notification' in window) {
-    if (Notification.permission === 'default') {
-      document.getElementById('notif-banner').style.display = 'flex';
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') {
+      document.getElementById('edit-modal').style.display = 'none';
+      editingId = null;
     }
+  });
+  document.getElementById('edit-title').addEventListener('keydown', e => {
+    if (e.key === 'Enter') saveEdit();
+  });
+
+  /* ── 初期化 ── */
+  if ('Notification' in window && Notification.permission === 'default') {
+    document.getElementById('notif-banner').style.display = 'flex';
   }
 
   render();
   setInterval(tick, 1000);
   checkNotifications();
 
-  // Service Worker登録（PWA・オフライン対応）
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('./sw.js');
   }
